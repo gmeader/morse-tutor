@@ -15,7 +15,7 @@
                 
  **************************************************************************/
 
-#define VERSION "V 1.1 May 8, 2026"
+#define VERSION "V 1.2 May 26, 2026"
 //===================================  INCLUDES ========================================= 
 #include "Adafruit_GFX.h"                         // Version 1.11.10
 #include "Adafruit_ILI9341.h"                     // Version 1.6.1
@@ -138,11 +138,12 @@ char *names[]     = {"WAYNE", "TYE", "DARREN", "MICHAEL", "SARAH", "DOUG", "FERN
 char *cities[]    = {"DAYTON, OH", "HADDONFIELD, NJ", "MURRYSVILLE, PA", "BALTIMORE, MD", "ANN ARBOR, MI", 
                      "BOULDER, CO", "BILLINGS, MT", "SANIBEL, FL", "CIMMARON, NM", "TYLER, TX", "OLYMPIA, WA"};
 char *rigs[]      = {"YAESU FT101", "KENWOOD 780", "ELECRAFT K3", "HOMEBREW", "QRPLABS QCX", "ICOM 7410", "FLEX 6400"};
-char punctuation[]= "!@$&()-+=,.:;'/";
-char prefix[]     = {'A', 'W', 'K', 'N'};
-char koch[]       = "KMRSUAPTLOWI.NJEF0Y,VG5/Q9ZH38B?427C1D6X";
+char punctuation[]= "!@$&()-+=,.:;'/\"?";
 
-byte morse[] = {                                  // Each character is encoded into an 8-bit byte:
+char prefix[]     = {'A', 'W', 'K', 'N'};
+char koch[]       = "KMRSUAPTLOWI.NJEF0Y,VG5/Q9ZH38B?427C1D6X-=$&+@!\"";
+
+byte morse[] = {                            // Each character is encoded into an 8-bit byte im ASCII code order:
   0b01001010,        // ! exclamation        
   0b01101101,        // " quotation          
   0b01010111,        // # pound                   // No Morse, mapped to SK
@@ -155,7 +156,7 @@ byte morse[] = {                                  // Each character is encoded i
   0b0,               // * asterisk                // No Morse
   0b00110101,        // + plus or ~AR
   0b01001100,        // , comma
-  0b01011110,        // - hypen
+  0b01011110,        // - hyphen
   0b01010101,        // . period
   0b00110110,        // / slant   
   0b00100000,        // 0                         // Read the bits from RIGHT to left,   
@@ -202,6 +203,9 @@ byte morse[] = {                                  // Each character is encoded i
   0b00010010,        // Y 
   0b00011100         // Z
 };
+const char all_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:;=?@!\"#$%&'()+,-./";
+const int total_items = sizeof(all_chars) - 1; 
+bool enabled_chars[total_items]; // which characters are to be enabled during training functions
 
 int charSpeed   = DEFAULTSPEED;                   // speed at which characters are sent, in WPM
 int codeSpeed   = DEFAULTSPEED;                   // overall code speed, in WPM
@@ -228,13 +232,12 @@ int brightness  = 100;                            // backlight level (range 0-10
 int startItem   = 0;                              // startup activity.  0 = main menu
 
 
-
 //===================================  Menu Variables ===================================
 int  menuCol=0, textRow=0, textCol=0;
 char *mainMenu[] = {" Receive ", "  Send  ", "Config "};        
 char *menu0[]    = {" Koch    ", " Letters ", " Words   ", " Numbers ", " Mixed   ", " SD Card ", " QSO     ", " Callsign", " Exit    "};
 char *menu1[]    = {" Practice", " Copy One", " Copy Two", " Cpy Word", " Cpy Call", " Flashcrd", " Head Cpy", " Two-Way ", " Exit    "};
-char *menu2[]    = {" Speed   ", " Chk Spd ", " Tone    ", " Key     ", " Callsign", " Screen  ", " Defaults", " Exit    "};
+char *menu2[]    = {" Speed   ", " Chk Spd ", " Tone    ", " Key     ", " Callsign", " CharSet "," Screen  ", " Defaults", " Exit    "};
 
 
 //===================================  Wireless Code  ===================================
@@ -813,6 +816,19 @@ void sendKoch()
 
 //===================================  Receive Menu  ====================================
 
+bool isEnabled(int asciiCode) {
+    if (asciiCode<=32) return false;                               // ignore control characters
+    if (asciiCode>96) asciiCode -= 32;                              // convert lower case to upper case
+    if (asciiCode>90) return false; 
+    // find index of character in all_chars[]
+    char letter =  asciiCode; // convert code to char
+    for (int i = 0; i < sizeof(all_chars); i++) {                   // look thru list of chars mapped to enabled array
+      if (letter == all_chars[i]) {
+        return enabled_chars[i];                                   // return true or false from boolean array
+      }
+    }
+    return false;
+}
 
 void addChar (char* str, char ch)                 // adds 1 character to end of string
 {                                            
@@ -823,7 +839,13 @@ void addChar (char* str, char ch)                 // adds 1 character to end of 
 
 char randomLetter()                               // returns a random uppercase letter
 {
-  return 'A'+random(0,26);
+  while (true) {
+    int index=random(0,26);                       // random capital letter 65 to 90
+    if (!isEnabled(65+index)) {                   // pass the ASCII code
+      continue;                                   // skip disabled characters
+    }
+     return 'A'+index;
+  }
 }
 
 char randomNumber()                               // returns a random single-digit # 0-9
@@ -1373,18 +1395,27 @@ void mimic (char* text)
 void flashcards()
 {
   displayHelp("Say the character, before it is displayed.");
+  displayEnabledChars();
   tft.setTextSize(7);
   while (!button_pressed)
   {
      int index = random(0,ELEMENTS(morse));       // get a random character
+     if (!isEnabled(index+33)) {                  // pass the ASCII code 
+         Serial.print(index);Serial.print(" ");Serial.print("enabledId:");Serial.print(index+33); Serial.print(" ");                // ASCII code
+      continue;                                   // loop past disabled characters
+     }
      int code = morse[index];                     // convert to morse code
      if (!code) continue;                         // only do valid morse chars
+     Serial.println();
+     Serial.print(index);Serial.print(" ");Serial.print(index+33);Serial.print(" ");Serial.print(char('!'+index));
      sendElements(code);                          // sound it out
      delay(1000);                                 // wait for user to guess
      tft.setCursor(120,70);
      tft.print(char('!'+index));                  // show the answer
      delay(FLASHCARDDELAY);                       // wait a little
-     newScreen();                                 // and start over.
+     tft.fillRect(0, TOPMARGIN, DISPLAYWIDTH, DISPLAYHEIGHT-140, bgColor);
+     Serial.println();
+     //newScreen();                                 // and start over.
   }
 }
 
@@ -1445,6 +1476,7 @@ void saveConfig()
   EEPROM.write(22,lowByte(textColor));
   EEPROM.write(23,highByte(bgColor));             // save background color
   EEPROM.write(24,lowByte(bgColor));
+  // EEPROM.put(25, enabled_chars);
   EEPROM.commit();                                // ESP32 only
 }
 
@@ -1469,6 +1501,7 @@ void loadConfig()
                  + EEPROM.read(22);               // and color low byte
      bgColor     =(EEPROM.read(23)<<8)
                  + EEPROM.read(24);
+      // EEPROM.get(25, enabled_chars);
      checkConfig();                               // ensure loaded settings are valid   
   } 
 }
@@ -1516,6 +1549,7 @@ void useDefaults()                                // if things get messed up...
   textColor   = TEXTCOLOR;
   bgColor     = BG;
   startItem   = -1;
+  // memset(char_toggled, true, sizeof(enabled_chars));
   saveConfig();
   roger();
 }
@@ -1839,6 +1873,171 @@ void setCallsign() {
   roger();  
 }
 
+void setCharSet()  // choose which characters are enabled or disabled
+{
+  int x_origin=15, y_origin=30; // screen coordinates
+  int current_item = 0; // index ito character array
+  int px=1, py=1; // screen coordinates
+  // const char all_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@$&()-+=,.:;'/";   
+  int max_index = sizeof(all_chars) - 2;
+  displayHelp(" Click on character to       enable/disable");        
+  tft.setTextSize(2);
+  tft.setCursor(x_origin,y_origin);
+  bool active = true;
+  // display the table of characters
+  displayCharacterTable(x_origin,y_origin);
+
+  while (active)  {     // loop waiting for SAVE button press        
+    while (!button_pressed)
+    {
+      int dir = readEncoder(2);
+      int targetRow = 0;
+      int targetCol = 0;
+      int last_index = 0;
+      if (dir!=0)                                   // user rotated encoder knob
+      {
+        last_index = current_item;                  // remember so hilite may be removed
+        current_item += dir*1;                      // so change index up/down
+
+        if (current_item < 0) { // lower bounds check
+          current_item = 0;
+          continue;
+        }
+        if (current_item > max_index+3) {  // upper bounds check
+          current_item = max_index+3; // all characters + the three buttons
+          continue;
+        }
+        if (last_index == max_index+1) {
+          showMenuItem("ALL",20,160,GREEN,bgColor); // reset ALL button after going to a char
+        }
+        if (current_item > max_index) {  // then we have selected a menu, not a character
+          if (current_item == max_index+1) {
+            // ALL button
+            showMenuItem("ALL",20,160,SELECTFG,SELECTBG);
+            if(last_index == max_index+2) { // restore NONE button
+              showMenuItem("NONE",100,160,GREEN,bgColor);
+            }
+            if(last_index == max_index) { // restore last char in table
+              getMatrixCoords(last_index, targetRow, targetCol);
+              // determine screen x,y coordinates
+              px = targetCol*20+x_origin;
+              py = targetRow*20+y_origin;
+              char last_char[2] = { all_chars[last_index], '\0' };
+              int active_fg = enabled_chars[last_index] ? YELLOW : BLUE;
+              showMenuItem(last_char,px,py,active_fg,bgColor);
+            }
+          }
+          if (current_item == max_index +2) {
+            // NONE button
+            showMenuItem("NONE",100,160,SELECTFG,SELECTBG);
+            if(last_index == max_index +1) {
+              showMenuItem("ALL",20,160,GREEN,bgColor); // reset
+            }
+             if(last_index == max_index +3) {
+              showMenuItem("SAVE",200,160,YELLOW,bgColor); // reset SAVE BUTTON
+            }
+          }
+          if (current_item == max_index +3) {
+            // SAVE button
+            showMenuItem("SAVE",200,160,SELECTFG,SELECTBG);
+            if(last_index == max_index +2) {
+              showMenuItem("NONE",100,160,GREEN,bgColor); // reset
+            }
+          }
+
+        }else{ // we have selected a character
+          char current_char[2] = { all_chars[current_item], '\0' };
+          // calculate position of current_item
+          getMatrixCoords(current_item, targetRow, targetCol);
+          // determine screen x,y coordinates
+          px = targetCol*20+x_origin;
+          py = targetRow*20+y_origin;
+          // hilite the character as selected
+          showMenuItem(current_char,px,py,SELECTFG,SELECTBG);
+
+          // reset the previously selected character hilite
+          char last_char[2] = { all_chars[last_index], '\0' };
+          // calculate position of previous item
+          getMatrixCoords(last_index, targetRow, targetCol);
+          // determine screen x,y coordinates
+          px = targetCol*20+x_origin;
+          py = targetRow*20+y_origin;
+          // reset the char to its current enabled/disabled status
+          int active_fg = enabled_chars[last_index] ? YELLOW : BLUE;
+          showMenuItem(last_char,px,py,active_fg,bgColor);
+        }
+      }
+    }  
+
+    // user clicks on something
+    button_pressed = false;
+    if (current_item <= max_index) 
+      {  // it's a character
+        // Toggles true to false, or false to true
+        //Serial.print("Toggle: ");
+        //Serial.println(current_item);
+        enabled_chars[current_item] = !enabled_chars[current_item];
+        displayCharacterTable(x_origin,y_origin); 
+      } else if (current_item == max_index+1) { // ALL button
+        // set all characters to enabled
+        //Serial.println("Enable all");
+        memset(enabled_chars, true, sizeof(enabled_chars));
+        displayCharacterTable(x_origin,y_origin);
+      } else if (current_item == max_index+2) {  // NONE button
+        // set all characters to disabled
+        //Serial.println("Disable all");
+        memset(enabled_chars, false, sizeof(enabled_chars));
+        displayCharacterTable(x_origin,y_origin);
+      } else {
+      // max_index +3 it is the SAVE button?
+      //if user pushes the button on the SAVE item, then save and exit
+      active = false;
+      Serial.println("SAVE");
+      saveConfig();                                   // save the new pitch 
+      roger();                                        // and acknowledge
+    }
+  }
+ 
+}
+
+void displayCharacterTable(int x_origin, int y_origin) {
+  // display the table of characters
+  //Serial.println("Display table");
+  int row = 1;
+  int col = 1; 
+  int px=1, py=1; // screen coordinates
+  for (int i = 0; i < sizeof(all_chars); i++) {
+    char c = all_chars[i]; // Get the character at position i
+    px = col*20+x_origin;
+    py = row*20+y_origin;
+    tft.setCursor(px,py);
+    // set color if disabled or enabled
+    int active_fg = enabled_chars[i] ? YELLOW : BLUE;
+    tft.setTextColor(active_fg);
+    tft.print(c); 
+    col++;
+    if (col>12) {
+      row++;
+      col=1;
+    }   
+  }
+  // display 3 menu items
+  tft.setCursor(20,160);
+  tft.setTextColor(GREEN);
+  tft.print("ALL");
+  tft.setCursor(100,160);
+  tft.print("NONE");
+  tft.setTextColor(YELLOW);
+  tft.setCursor(200,160);
+  tft.print("SAVE");
+}
+// determine row and col given an index into the 12 x 5 matrix of characters
+void getMatrixCoords(int index, int &row, int &col) {
+  // zero-based indexint zeroBasedIndex = index - 1;
+  row = (index / 12) + 1; // Integer division rounds down automatically
+  col = (index % 12) + 1; // % is the modulo operator
+}
+
 //===================================  Screen Routines ====================================
 
 //  The screen is divided into 3 areas:  Menu, Icons, and Body
@@ -1896,6 +2095,29 @@ void displayHelp(char *str)
   tft.print(str);
   tft.setTextColor(textColor, bgColor);
 }
+
+void displayEnabledChars() 
+{
+  tft.setTextSize(2);                   
+  tft.setCursor(2, MAXROW*ROWSPACING-50); // near bottom of screen 
+  tft.setTextColor(GREEN, bgColor);
+  tft.print("Enabled characters: ");
+  Serial.print("Enabled characters: ");
+  for (int i = 0; i < sizeof(all_chars)-1; i++) {
+    char letter = all_chars[i];
+    if (enabled_chars[i]) {
+      tft.print(letter);
+      //Serial.print("Enabled");
+      Serial.print(i);Serial.print(":");
+      Serial.print(letter);
+      Serial.print(" ");
+    }
+    //Serial.println(" ");
+  }
+  tft.setTextColor(textColor, bgColor);
+  Serial.println(" ");
+}
+
 void newScreen()                                  // prepare display for new text.  Menu not distrubed
 {
   clearBody();                                    // clear screen below menu
@@ -2125,6 +2347,7 @@ void splashScreen()                               // not splashy at all!
 void setup() 
 {
   Serial.begin(115200);                           // for debugging only 
+  memset(enabled_chars, true, sizeof(enabled_chars)); // All characters enabled by default
   initScreen();                                   // blank screen in landscape mode
   EEPROM.begin(32);                               // ESP32 specific for 32 bytes Flash
   initSD();                                       // initialize SD library
@@ -2174,8 +2397,9 @@ void loop()
     case 22: setPitch(); break;
     case 23: configKey(); break;
     case 24: setCallsign(); break;
-    case 25: setScreen(); break;
-    case 26: useDefaults(); break;
+    case 25: setCharSet(); break;
+    case 26: setScreen(); break;
+    case 27: useDefaults(); break;
     default: ;
   }  
 }
