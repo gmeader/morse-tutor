@@ -2,12 +2,13 @@
 
 These releases will be in the form of a .bin file that can be uploaded to the Morse Tutor device connected to a computer with a USB cable.
 
-You need to use software from the makers of the ESP chips to upload the .bin file. the filename will be something like `tutor1-2.bin`
+You need to use the esptool software from the makers of the ESP chips to upload the .bin file. The release version filename to upload will be  named something like `tutor1-2.bin`
 
 # Prerequisites
 Install esptool: 
 1. You need Python installed. you'll access it from a command line terminal on your computer.
-2. Run `pip install esptool` in your terminal.
+2. Run `pip install esptool` in your terminal to install esptool.
+   (Info on esptool: https://docs.espressif.com/projects/esptool/en/latest/esp32/installation.html)
 
 # Uploading
 1. plug your Morse Tutor into the USB cable connected to your computer.
