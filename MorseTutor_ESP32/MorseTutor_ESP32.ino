@@ -15,7 +15,7 @@
                 
  **************************************************************************/
 
-#define VERSION "V 1.2 May 26, 2026"
+#define VERSION "V 1.3 May 28, 2026"
 //===================================  INCLUDES ========================================= 
 #include "Adafruit_GFX.h"                         // Version 1.11.10
 #include "Adafruit_ILI9341.h"                     // Version 1.6.1
@@ -91,6 +91,7 @@ const word colors[] = {BLACK,BLUE,NAVY,RED,MAROON,GREEN,LIME,CYAN,TEAL,PURPLE,
 #define DISPLAYWIDTH      320                     // Number of LCD pixels in long-axis
 #define DISPLAYHEIGHT     240                     // Number of LCD pixels in short-axis
 #define TOPMARGIN          30                     // All submenus appear below top line
+#define LEFTMARGIN         4                     // if screen is cut
 #define MENUSPACING       100                     // Width in pixels for each menu column
 #define ROWSPACING         23                     // Height in pixels for each text row
 #define COLSPACING         12                     // Width in pixels for each text character
@@ -106,6 +107,8 @@ const word colors[] = {BLACK,BLUE,NAVY,RED,MAROON,GREEN,LIME,CYAN,TEAL,PURPLE,
 #define ELEMENTS(x) (sizeof(x) / sizeof(x[0]))    // Handy macro for determining array sizes
 
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC);
+// Initializes the entire 2D array used for scrolling with space characters
+char textGrid[MAXROW][MAXCOL] = {0};
 
 //===================================  Rotary Encoder Variables =========================
 volatile int      rotaryCounter    = 0;           // "position" of rotary encoder (increments CW) 
@@ -885,6 +888,7 @@ void randomRST(char* rst)
 
 void sendNumbers()                                
 { 
+  displayHelp("Send <dit> to pause/resume");
   while (!button_pressed) {
     for (int i=0; i<WORDSIZE; i++)                // break them up into "words"
       sendCharacter(randomNumber());              // send a number
@@ -904,6 +908,7 @@ void sendLetters()
 
 void sendMixedChars()                             // send letter/number groups...
 { 
+  displayHelp("Send <dit> to pause/resume");
   while (!button_pressed) {                            
     for (int i=0; i<WORDSIZE; i++)                // break them up into "words"
     {
@@ -916,6 +921,7 @@ void sendMixedChars()                             // send letter/number groups..
 
 void sendPunctuation()
 {
+  displayHelp("Send <dit> to pause/resume");
   while (!button_pressed) {
     for (int i=0; i<WORDSIZE; i++)                // break them up into "words"
     {
@@ -1065,7 +1071,7 @@ void sendFile(char* filename)                     // output a file to screen & m
   strcat(s,filename);                             // ESP32: prepend filename with slash
   const int pageSkip = 250;                       // number of characters to skip, if asked to
   newScreen();                                    // clear screen below menu
-  displayHelp("<dit> to pause/resume      -.-. to skip forward");
+  displayHelp("<dit> to pause/resume   C -.-. to skip forward");
   bool wireless = longPress();                    // if long button press, send file wirelessly
   if (wireless) initWireless();                   // start wireless transmission
   button_pressed = false;                         // reset flag for new presses
@@ -1401,20 +1407,20 @@ void flashcards()
   {
      int index = random(0,ELEMENTS(morse));       // get a random character
      if (!isEnabled(index+33)) {                  // pass the ASCII code 
-         Serial.print(index);Serial.print(" ");Serial.print("enabledId:");Serial.print(index+33); Serial.print(" ");                // ASCII code
+         //Serial.print(index);Serial.print(" ");Serial.print("enabledId:");Serial.print(index+33); Serial.print(" ");                // ASCII code
       continue;                                   // loop past disabled characters
      }
      int code = morse[index];                     // convert to morse code
      if (!code) continue;                         // only do valid morse chars
-     Serial.println();
-     Serial.print(index);Serial.print(" ");Serial.print(index+33);Serial.print(" ");Serial.print(char('!'+index));
+     //Serial.println();
+     //Serial.print(index);Serial.print(" ");Serial.print(index+33);Serial.print(" ");Serial.print(char('!'+index));
      sendElements(code);                          // sound it out
      delay(1000);                                 // wait for user to guess
      tft.setCursor(120,70);
      tft.print(char('!'+index));                  // show the answer
      delay(FLASHCARDDELAY);                       // wait a little
      tft.fillRect(0, TOPMARGIN, DISPLAYWIDTH, DISPLAYHEIGHT-140, bgColor);
-     Serial.println();
+     //Serial.println();
      //newScreen();                                 // and start over.
   }
 }
@@ -1698,8 +1704,9 @@ void setScreen()
 void setCodeSpeed()
 {
   const int x=240,y=50;                           // screen posn for speed display
-  tft.println("\nEnter");
-  tft.print("Code Speed (WPM):");
+  tft.setCursor(LEFTMARGIN,TOPMARGIN+4);
+  tft.println("Enter");
+  tft.print(" Code Speed (WPM):");
   tft.setTextSize(4);
   tft.setCursor(x,y);
   tft.print(charSpeed);                           // display current speed
@@ -1726,8 +1733,8 @@ void setFarnsworth()
   if (codeSpeed>charSpeed) 
      codeSpeed = charSpeed;                       // dont go above charSpeed
   tft.setTextSize(2);
-  tft.println("\n\n\nFarnsworth");
-  tft.print("Speed (WPM):");
+  tft.println("\n\n\n Farnsworth");
+  tft.print(" Speed (WPM):");
   tft.setTextSize(4);
   tft.setCursor(x,y);
   tft.print(codeSpeed);                           // display current speed
@@ -1752,8 +1759,8 @@ void setExtraWordDelay()                          // add extra word spacing
 {
   const int x=240,y=150;                          // screen posn for speed display
   tft.setTextSize(2);
-  tft.println("\n\n\nExtra Word Delay");
-  tft.print("(Spaces):");
+  tft.println("\n\n\n Extra Word Delay");
+  tft.print(" (Spaces):");
   tft.setTextSize(4);
   tft.setCursor(x,y);
   tft.print(xWordSpaces);                         // display current space
@@ -1992,7 +1999,7 @@ void setCharSet()  // choose which characters are enabled or disabled
       // max_index +3 it is the SAVE button?
       //if user pushes the button on the SAVE item, then save and exit
       active = false;
-      Serial.println("SAVE");
+      //Serial.println("SAVE");
       saveConfig();                                   // save the new pitch 
       roger();                                        // and acknowledge
     }
@@ -2061,7 +2068,7 @@ void clearMenu()
 
 void clearBody()
 {
-  tft.fillRect(0, TOPMARGIN, DISPLAYWIDTH, DISPLAYHEIGHT, bgColor);  
+  tft.fillRect(0, TOPMARGIN, DISPLAYWIDTH, DISPLAYHEIGHT-TOPMARGIN, bgColor);  
 }
 
 void clearScreen()
@@ -2102,20 +2109,20 @@ void displayEnabledChars()
   tft.setCursor(2, MAXROW*ROWSPACING-50); // near bottom of screen 
   tft.setTextColor(GREEN, bgColor);
   tft.print("Enabled characters: ");
-  Serial.print("Enabled characters: ");
+  //Serial.print("Enabled characters: ");
   for (int i = 0; i < sizeof(all_chars)-1; i++) {
     char letter = all_chars[i];
     if (enabled_chars[i]) {
       tft.print(letter);
       //Serial.print("Enabled");
-      Serial.print(i);Serial.print(":");
-      Serial.print(letter);
-      Serial.print(" ");
+      //Serial.print(i);Serial.print(":");
+      //Serial.print(letter);
+      //Serial.print(" ");
     }
     //Serial.println(" ");
   }
   tft.setTextColor(textColor, bgColor);
-  Serial.println(" ");
+  //Serial.println(" ");
 }
 
 void newScreen()                                  // prepare display for new text.  Menu not distrubed
@@ -2126,6 +2133,28 @@ void newScreen()                                  // prepare display for new tex
   textRow=0; textCol=0;                           // position text cursor below the top menu
 }
 
+// empty the text grid
+void clearGrid() 
+{
+  for (int r = 0; r < MAXROW; r++) {
+    for (int c = 0; c < MAXCOL; c++) {
+      textGrid[r][c] = ' '; // Sets every character to a blank space
+    }
+  }
+}
+
+// print the current state of the text grid to the Serial Monitor
+void printGrid() 
+{
+  for (int r = 0; r < MAXROW; r++) {
+    Serial.print(r);Serial.print(" ");
+    for (int c = 0; c < MAXCOL; c++) {
+      Serial.print(textGrid[r][c]);
+    }
+    Serial.println(); // New line after each row
+  }
+}
+
 
 //===================================  Menu Routines ====================================
 
@@ -2133,8 +2162,9 @@ void showCharacter(char c, int row, int col)      // display a character at give
 {
   int x = col * COLSPACING;                       // convert column to x coordinate
   int y = TOPMARGIN + (row * ROWSPACING);         // convert row to y coordinate
-  tft.setCursor(x,y);                             // position character on screen
+  tft.setCursor(x+LEFTMARGIN,y);                             // position character on screen
   tft.print(c);                                   // and display it 
+  textGrid[row][col] = c;                         // store in scroll grid
 }
 
 void addCharacter(char c)
@@ -2145,9 +2175,72 @@ void addCharacter(char c)
      ((c==' ') && (textCol>MAXCOL-7)))            // or at a wordspace thats near end of row?
   {
     textRow++; textCol=0;                         // yes, so advance to beginning of next row
-    if (textRow >= MAXROW) newScreen();           // if no more rows, clear & start at top.
+    if (textRow >= MAXROW-1) {                    // if no more rows, scroll.
+      scrollScreen();    
+      textRow=MAXROW-2;                          
+      //newScreen();                                 // if no more rows, clear & start at top.
+    }
   }
 }
+
+
+void scrollScreen() // scrolls the text area below the menu one line
+{
+  scrollTextGrid();
+  displayTextGrid();
+}
+
+// display scrolled textgrid on LCD
+void displayTextGrid()
+{
+  int scrollBodyHeight = ROWSPACING*8-6;
+  tft.fillRect(0, TOPMARGIN, DISPLAYWIDTH, scrollBodyHeight, bgColor);  //clear body except for help rows
+  for (int r = 0; r < MAXROW-1; r++) {
+    //  collect chars from textgrid row into a line
+    String scrollLine=getRowAsString(r);
+    //scrollLine.trim(); // Removes any leading or trailing whitespace
+    // display line on row r
+    int y = TOPMARGIN + (r * ROWSPACING);
+    tft.setCursor(LEFTMARGIN,y);                             // position on screen
+    tft.print(scrollLine);
+  }
+}
+
+/**
+ * Collects elements from a specific row and returns them as an Arduino String.
+ * @param rowIndex The index of the row to read (0 to ROWS-1)
+ * @return A String object containing the row's characters
+ */
+String getRowAsString(int rowIndex) {
+  String result = ""; // Start with an empty String
+  for (int c = 0; c < MAXCOL; c++) {
+    char rawChar = textGrid[rowIndex][c];
+    //  null characters become spaces if they exist in your empty grid
+    if (rawChar == '\0') {
+      result += " ";
+    }else{
+      result += rawChar;
+    }
+  }
+  return result;
+}
+
+// Scrolls the 2D array in the specified direction.
+// Shifts rows and fills the newly emptied row with spaces.
+void scrollTextGrid() 
+{
+  // Shift every row up by one
+  for (int r = 0; r < MAXROW - 1; r++) {
+    for (int c = 0; c < MAXCOL; c++) {
+      textGrid[r][c] = textGrid[r + 1][c];
+    }
+  }
+  // Clear the bottom row with spaces (or '\0')
+  for (int c = 0; c < MAXCOL; c++) {
+    textGrid[MAXROW - 1][c] = ' '; 
+  }
+}
+
 
 int getMenuSelection()                            // Display menu system & get user selection
 {
@@ -2175,7 +2268,7 @@ void setTopMenu(char *str)                        // erase menu & replace with n
     clearScreen();
     clearBody();
   }
-  showMenuItem(str,0,0,FG,bgColor);
+  showMenuItem(str,LEFTMARGIN,0,FG,bgColor);
   displayTopWPM();
 }
 
@@ -2321,6 +2414,7 @@ void initScreen()
   tft.setRotation(SCREEN_ROTATION);               // landscape mode: use '1' or '3'
   tft.fillScreen(BLACK);                          // start with blank screen
   setBrightness(100);                             // start screen full brighness
+  //initScrollScreen();
 }
 
 void splashScreen()                               // not splashy at all!
